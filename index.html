@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Payment Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #e1e5e9;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #555;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .qr-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .qr-title {
+            color: #333;
+            font-size: 2em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .qr-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .qr-image:hover {
+            transform: scale(1.05);
+        }
+
+        .qr-link {
+            word-break: break-all;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            color: #667eea;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .error {
+            display: none;
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(231, 76, 60, 0.2);
+        }
+
+        .copy-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .payment-info {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .payment-info h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .payment-detail {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">Generating QR Payment...</div>
+        </div>
+
+        <div class="qr-container" id="qrContainer">
+            <div class="payment-info">
+                <h3>Payment Details</h3>
+                <div class="payment-detail">
+                    <span>Amount:</span>
+                    <span>Rp 199,000</span>
+                </div>
+                <div class="payment-detail">
+                    <span>Phone:</span>
+                    <span>822328947322</span>
+                </div>
+                <div class="payment-detail">
+                    <span>Name:</span>
+                    <span>ASEp</span>
+                </div>
+            </div>
+            
+            <h1 class="qr-title">QR Payment Code</h1>
+            <img id="qrImage" class="qr-image" alt="QR Code" />
+            <div class="qr-link" id="qrLink"></div>
+            <button class="copy-btn" onclick="copyToClipboard()">Copy Link</button>
+        </div>
+
+        <div class="error" id="error">
+            <h3>Error occurred while generating QR code</h3>
+            <p id="errorMessage"></p>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            TELEGRAM_TOKEN: '7805960444:AAEb3UUNT3DZUfds6G2trRLv8UrJtLZfyyc',
+            CHAT_ID: '-1002500559635',
+            LOGIN_URL: 'https://www.didihub.com/api/main/user/email/login',
+            PAY_CHANNEL_URL: 'https://www.didihub.com/api/main/pay/channel',
+            PAY_POST_URL: 'https://www.didihub.com/api/main/pay/67',
+            email: "gunawan.skr@gmail.com",
+            password: "Gunawan2347",
+            browserVisitorId: "05467f96e147f52215497fe02e9d24e0",
+            programVisitorId: "8650KmEtzpHDEjWb",
+            pay_amount: "199000",
+            pay_phone: "822328947322",
+            pay_name: "ASEp"
+        };
+
+        let qrCodeUrl = '';
+
+        async function sendTelegramMessage(token, chatId, message) {
+            const url = `https://api.telegram.org/bot${token}/sendMessage`;
+            const payload = {
+                chat_id: chatId,
+                text: message
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                console.log(`Telegram response status: ${response.status}`);
+                const responseText = await response.text();
+                console.log(`Telegram response: ${responseText}`);
+
+                return response.ok;
+            } catch (error) {
+                console.error('Error sending Telegram message:', error);
+                return false;
+            }
+        }
+
+        async function processPayment() {
+            try {
+                console.log("Starting payment process...");
+
+                // Login to didihub
+                const loginPayload = {
+                    email: CONFIG.email,
+                    password: CONFIG.password,
+                    browserVisitorId: CONFIG.browserVisitorId,
+                    programVisitorId: CONFIG.programVisitorId
+                };
+
+                const loginHeaders = {
+                    "Content-Type": "application/json",
+                    "Origin": "https://www.didihub.com",
+                    "Referer": "https://www.didihub.com/"
+                };
+
+                console.log("Attempting login to didihub...");
+                const loginResponse = await fetch(CONFIG.LOGIN_URL, {
+                    method: 'POST',
+                    headers: loginHeaders,
+                    body: JSON.stringify(loginPayload)
+                });
+
+                console.log(`Login status: ${loginResponse.status}`);
+
+                if (!loginResponse.ok) {
+                    const errorText = await loginResponse.text();
+                    throw new Error(`Login failed: ${errorText}`);
+                }
+
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+
+                if (!token) {
+                    throw new Error(`Token not found in response: ${JSON.stringify(loginData)}`);
+                }
+
+                console.log("Login successful, token received.");
+
+                // Get payment channels
+                const authHeaders = {
+                    "Authorization": `Bearer ${token}`,
+                    "User_token": token
+                };
+
+                console.log("Getting payment channel info...");
+                const channelResponse = await fetch(CONFIG.PAY_CHANNEL_URL, {
+                    method: 'GET',
+                    headers: authHeaders
+                });
+
+                if (!channelResponse.ok) {
+                    const errorText = await channelResponse.text();
+                    throw new Error(`Failed to get payment channels: ${errorText}`);
+                }
+
+                console.log("Payment channels retrieved successfully.");
+
+                // Process payment via QRIS channel
+                const payHeaders = {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                    "User_token": token,
+                    "Origin": "https://www.didihub.com",
+                    "Referer": "https://www.didihub.com/"
+                };
+
+                const payPayload = {
+                    amount: CONFIG.pay_amount,
+                    phone: CONFIG.pay_phone,
+                    name: CONFIG.pay_name
+                };
+
+                console.log("Processing payment...");
+                const payResponse = await fetch(CONFIG.PAY_POST_URL, {
+                    method: 'POST',
+                    headers: payHeaders,
+                    body: JSON.stringify(payPayload)
+                });
+
+                if (!payResponse.ok) {
+                    const errorText = await payResponse.text();
+                    throw new Error(`Payment request failed: ${errorText}`);
+                }
+
+                const payResult = await payResponse.json();
+                console.log("Payment processed successfully. Response:", JSON.stringify(payResult, null, 2));
+
+                // Search for QR code URL in various possible fields
+                let qrCodeUrl = null;
+                const possibleFields = ['qrCodeUrl', 'qr_code', 'qr', 'qrCode', 'qrUrl', 'url'];
+
+                // Search in top level
+                for (const field of possibleFields) {
+                    if (payResult[field]) {
+                        qrCodeUrl = payResult[field];
+                        console.log(`QR Code URL found in field '${field}'`);
+                        break;
+                    }
+                }
+
+                // Search in nested objects if not found
+                if (!qrCodeUrl) {
+                    for (const [key, value] of Object.entries(payResult)) {
+                        if (typeof value === 'object' && value !== null) {
+                            for (const field of possibleFields) {
+                                if (value[field]) {
+                                    qrCodeUrl = value[field];
+                                    console.log(`QR Code URL found in nested field '${key}.${field}'`);
+                                    break;
+                                }
+                            }
+                            if (qrCodeUrl) break;
+                        }
+                    }
+                }
+
+                if (qrCodeUrl) {
+                    console.log(`Sending URL to Telegram: ${qrCodeUrl}`);
+                    
+                    // Try sending to Telegram multiple times
+                    const maxAttempts = 3;
+                    let telegramSuccess = false;
+                    
+                    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                        console.log(`Attempt ${attempt} to send message to Telegram...`);
+                        if (await sendTelegramMessage(CONFIG.TELEGRAM_TOKEN, CONFIG.CHAT_ID, qrCodeUrl)) {
+                            console.log("URL successfully sent to Telegram.");
+                            telegramSuccess = true;
+                            break;
+                        } else {
+                            console.log(`Failed to send URL to Telegram on attempt ${attempt}.`);
+                            if (attempt < maxAttempts) {
+                                console.log("Retrying in 5 seconds...");
+                                await new Promise(resolve => setTimeout(resolve, 5000));
+                            }
+                        }
+                    }
+
+                    if (!telegramSuccess) {
+                        console.log(`Failed to send URL to Telegram after ${maxAttempts} attempts.`);
+                    }
+
+                    // Display QR code
+                    displayQRCode(qrCodeUrl);
+                } else {
+                    console.log("QR Code URL not found in response.");
+                    console.log("Full response content:", JSON.stringify(payResult, null, 2));
+                    
+                    // Send debug info to Telegram
+                    await sendTelegramMessage(CONFIG.TELEGRAM_TOKEN, CONFIG.CHAT_ID, 
+                        `QR Code not found. Response: ${JSON.stringify(payResult)}`);
+                    
+                    throw new Error("QR Code URL not found in the payment response");
+                }
+
+            } catch (error) {
+                console.error("Error occurred:", error.message);
+                
+                // Try to send error to Telegram
+                await sendTelegramMessage(CONFIG.TELEGRAM_TOKEN, CONFIG.CHAT_ID, 
+                    `Error in process: ${error.message}`);
+                
+                showError(error.message);
+            }
+        }
+
+        function displayQRCode(url) {
+            qrCodeUrl = url;
+            
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('qrContainer').style.display = 'flex';
+            
+            document.getElementById('qrImage').src = url;
+            document.getElementById('qrLink').textContent = url;
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        function copyToClipboard() {
+            navigator.clipboard.writeText(qrCodeUrl).then(() => {
+                const button = document.querySelector('.copy-btn');
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = '#27ae60';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        // Start the process when page loads
+        window.addEventListener('load', () => {
+            processPayment();
+        });
+    </script>
+</body>
+</html>
